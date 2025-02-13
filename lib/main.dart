@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 import 'dart:html' as html;
@@ -7,7 +6,7 @@ import 'dart:js' as js;
 
 /// Entrypoint of the application.
 void main() {
-  // Ensure the web view is set up
+  // Ensure the web view uses path-based URL strategy.
   setUrlStrategy(PathUrlStrategy());
   runApp(const MyApp());
 }
@@ -20,14 +19,12 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: 'Flutter Demo',
+        title: 'View Image',
         home: const HomePage());
   }
 }
 
-enum SampleItem { enter, exit }
-
-/// [Widget] displaying the home page consisting of an image the the buttons.
+/// Home page widget displaying the form, image preview, and floating action button.
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -37,21 +34,23 @@ class HomePage extends StatefulWidget {
 
 /// State of a [HomePage].
 class _HomePageState extends State<HomePage> {
-  final _formKey = GlobalKey<FormState>();
-  bool _showImage = false;
-  final TextEditingController _urlController = TextEditingController();
-  SampleItem? selectedItem;
+  final _formKey = GlobalKey<FormState>(); // Key to manage the form state.
+  final _urlController =
+      TextEditingController(); // Controller for the URL TextField.
+  bool _isButtonEnabled = false; // Tracks whether the button is enabled.
+  bool _showImage = false; // Tracks whether the image should be displayed.
 
   @override
   void initState() {
     // TODO: implement initState
     super.initState();
-    // Inject the JavaScript for fullscreen functionality
+    // Inject JavaScript functions for full-screen functionality.
     _injectFullScreenFunction();
-    _enterFullScreenFunction();
-    _exitFullScreenFunction();
+    _injectenterFullScreenFunction();
+    _injectexitFullScreenFunction();
   }
 
+  /// Injects a toggle function for entering and exiting fullscreen mode.
   void _injectFullScreenFunction() {
     js.context['toggleFullScreen'] = () {
       if (html.document.fullscreenElement == null) {
@@ -62,29 +61,36 @@ class _HomePageState extends State<HomePage> {
     };
   }
 
-  void _enterFullScreenFunction() {
+  /// Injects a function for entering fullscreen mode.
+  void _injectenterFullScreenFunction() {
     js.context['enterFullScreen'] = () {
-      
-        html.document.documentElement!.requestFullscreen();
-      
+      html.document.documentElement!.requestFullscreen();
     };
   }
 
-  void _exitFullScreenFunction() {
+  /// Injects a function for exiting fullscreen mode.
+  void _injectexitFullScreenFunction() {
     js.context['exitFullScreen'] = () {
-      
-        html.document.exitFullscreen();
-      
+      html.document.exitFullscreen();
     };
   }
 
+  /// Validates the form and updates the button state.
+  void _validateForm() {
+    setState(() {
+      _isButtonEnabled = _formKey.currentState?.validate() ?? false;
+    });
+  }
+
+  /// Displays the image in an HTML `<img>` element.
   void _displayImage() {
     final String imageUrl = _urlController.text.trim();
 
     if (imageUrl.isNotEmpty) {
-      // Create or update the <img> element with the new URL
+      // Check if the image element already exists.
       html.ImageElement? imgElement =
           html.document.getElementById('image-element') as html.ImageElement?;
+      // Create a new image element if it doesn't exist.
       if (imgElement == null) {
         imgElement = html.ImageElement()
           ..id = 'image-element'
@@ -93,7 +99,7 @@ class _HomePageState extends State<HomePage> {
           ..style.height = '100%'
           ..style.objectFit = 'contain';
 
-        // Add a double-click listener for fullscreen mode
+        // Add a double-click event listener for toggling fullscreen mode.
         imgElement.addEventListener('dblclick', (event) {
           js.context.callMethod('toggleFullScreen');
         });
@@ -118,9 +124,19 @@ class _HomePageState extends State<HomePage> {
   }
 
   @override
+  void dispose() {
+    // Dispose the controller to release resources.
+    _urlController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-        appBar: AppBar(),
+        appBar: AppBar(
+          centerTitle: true,
+          title: Text("View Image"),
+        ),
         body: Padding(
           padding: const EdgeInsets.fromLTRB(32, 16, 32, 16),
           child: Form(
@@ -128,15 +144,14 @@ class _HomePageState extends State<HomePage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Image preview container.
                 Expanded(
                   child: AspectRatio(
                     aspectRatio: 1,
                     child: Stack(
                       children: [
                         _showImage
-                            ? Container(
-                                child: HtmlElementView(viewType: 'image-view'),
-                              )
+                            ? HtmlElementView(viewType: 'image-view')
                             : Container(
                                 decoration: BoxDecoration(
                                   color: Colors.grey,
@@ -148,18 +163,29 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
                 const SizedBox(height: 8),
+                // URL input field and submit button.
                 Row(
                   children: [
                     Expanded(
-                      child: TextField(
+                      child: TextFormField(
                         controller: _urlController,
+                        onChanged: (value) => _validateForm(),
+                        validator: (value) {
+                          // Validation logic: the field cannot be empty
+                          if (value == null || value.isEmpty) {
+                            return 'This field cannot be empty';
+                          }
+                          return null;
+                        },
                         decoration: InputDecoration(hintText: 'Image URL'),
                       ),
                     ),
                     ElevatedButton(
-                      onPressed: () {
-                        _displayImage();
-                      },
+                      onPressed: _isButtonEnabled
+                          ? () {
+                              _displayImage();
+                            }
+                          : null,
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(0, 12, 0, 12),
                         child: Icon(Icons.arrow_forward),
@@ -173,58 +199,62 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         floatingActionButton: FloatingActionButton(
-          onPressed: () {
-            contextMenuDialog(context);
-          },
+          onPressed: () => _showContextMenu(context),
           child: Icon(Icons.add),
-        )
-        // CupertinoContextMenu(actions: [
-        //   CupertinoContextMenuAction(child: Text('Item 1')),
-        //   CupertinoContextMenuAction(child: Text('Item 2')),
-        // ], child: Icon(Icons.add))
-        //     FloatingActionButton(
-        //   onPressed: () {},
-        //   child: PopupMenuButton<SampleItem>(
-        //     requestFocus: true,
-        //     initialValue: selectedItem,
-        //     child: Icon(Icons.add),
-        //     onSelected: (SampleItem item) {
-        //       setState(() {
-        //         selectedItem = item;
-        //       });
-        //     },
-        //     itemBuilder: (BuildContext context) => <PopupMenuEntry<SampleItem>>[
-        //       const PopupMenuItem<SampleItem>(
-        //           value: SampleItem.enter, child: Text('Item 1')),
-        //       const PopupMenuItem<SampleItem>(
-        //           value: SampleItem.exit, child: Text('Item 2')),
-        //     ],
-        //   ),
-        // ),
-        );
+        ));
   }
 
-  void contextMenuDialog(BuildContext context) {
+  /// Displays a context menu dialog for fullscreen actions.
+  void _showContextMenu(BuildContext context) {
     showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return Dialog(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextButton(
-                    onPressed: () {
-                      js.context.callMethod('enterFullScreen');
-                    },
-                    child: Text("Enter")),
-                TextButton(
-                    onPressed: () {
-                      js.context.callMethod('exitFullScreen');
-                    },
-                    child: Text("Exit")),
-              ],
-            ),
-          );
-        });
+      context: context,
+      builder: (context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16), // Rounded corners
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                height: 8,
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () {
+                  js.context.callMethod('enterFullScreen');
+                },
+                child: const Text('Enter Full Screen'),
+              ),
+              SizedBox(
+                height: 8,
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () {
+                  js.context.callMethod('exitFullScreen');
+                },
+                child: const Text('Exit Full Screen'),
+              ),
+              SizedBox(
+                height: 8,
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
