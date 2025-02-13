@@ -229,6 +229,8 @@ class _HomePageState extends State<HomePage> {
                 ),
                 onPressed: () {
                   js.context.callMethod('enterFullScreen');
+                  //To Close the Menu Dialog
+                  Navigator.pop(context);
                 },
                 child: const Text('Enter Full Screen'),
               ),
@@ -245,6 +247,8 @@ class _HomePageState extends State<HomePage> {
                 ),
                 onPressed: () {
                   js.context.callMethod('exitFullScreen');
+                  //To Close the Menu Dialog
+                  Navigator.pop(context);
                 },
                 child: const Text('Exit Full Screen'),
               ),
